@@ -1,6 +1,6 @@
 PROJECT = natpmp
 PROJECT_DESCRIPTION = NAT-PMP client
-PROJECT_VERSION = 0.1.0
+PROJECT_VERSION = 0.2.0
 
 include erlang.mk
 

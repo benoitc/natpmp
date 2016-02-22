@@ -26,7 +26,7 @@ ExternalPortRequest = 8080,
 Lifetime = 3600,
 
 {ok, Since, InternalPort, ExternalPortRequest, MappingLifetile} = \
-    natpmp:add_port_mapping(GatewayIP, tcp, 80, 0).
+    natpmp:add_port_mapping(GatewayIP, Protocol, InternalPort, ExternalPortRequest, Lifetime).
 ```
 
 This map the port 80 to the port 8080.

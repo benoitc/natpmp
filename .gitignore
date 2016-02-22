@@ -1,0 +1,7 @@
+.erlang.mk
+natpmp.d
+ebin/*.beam
+deps
+test/*.tmp
+test/*.beam
+.rebar

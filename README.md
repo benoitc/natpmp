@@ -9,7 +9,7 @@ See http://tools.ietf.org/html/draft-cheshire-nat-pmp-03
 ### Get External IP address
 
 ```erlang
-1> GatewayIP = "10.0.1.1"
+1> GatewayIP = "10.0.1.1",
 2> natpmp:get_external_ip(GatewayIp).
 {ok,"192.168.1.50"}
 ```
@@ -19,7 +19,7 @@ This will return the external IP.
 ### Map an External IP Address
 
 ```erlang
-GatewayIP = "10.0.1.1"
+GatewayIP = "10.0.1.1",
 Protocol = tcp,
 InternalPort = 80,
 ExternalPortRequest = 8080,

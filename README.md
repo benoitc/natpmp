@@ -2,7 +2,7 @@
 
 Implement the NAT-PMP protocol, typically supported by Apple routers and open source
 routers such as DD-WRT and Tomato.
-See http://tools.ietf.org/html/draft-cheshire-nat-pmp-03
+See https://tools.ietf.org/html/rfc6886
 
 ## Usage
 

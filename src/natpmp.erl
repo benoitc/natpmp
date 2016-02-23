@@ -103,8 +103,7 @@ discover_wait(Workers, Ref) ->
                                   end
                           end, Workers -- [WorkerPid]),
             {ok, GatewayIp};
-        {'DOWN', _MRef, _Type, WorkerPid, Info} ->
-            io:format("worker is down: ~p~n", [Info]),
+        {'DOWN', _MRef, _Type, WorkerPid, _Info} ->
             discover_wait(Workers -- [WorkerPid], Ref)
 
     end.

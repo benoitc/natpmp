@@ -45,7 +45,7 @@ get_internal_address(Gateway) ->
     inet_parse:ntoa(MyIp).
 
 discover_with_addr(Parent, Ref, Addr) ->
-    case natpmp:get_external_address(Addr) of
+    case (catch natpmp:get_external_address(Addr)) of
         {ok, _Ip} ->
             Parent ! {nat, Ref, self(), Addr};
         _Else ->
@@ -85,7 +85,7 @@ discover() ->
                                                     end),
                                    erlang:monitor(process, Pid),
                                    [Pid | Acc]
-                           end, [], IPs),
+                           end, [], lists:usort(IPs)),
 
      discover_wait(Workers, Ref).
 

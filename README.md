@@ -10,7 +10,7 @@ See https://tools.ietf.org/html/rfc6886
 
 ```erlang
 1> GatewayIP = "10.0.1.1",
-2> natpmp:get_external_ip(GatewayIp).
+2> natpmp:get_external_address(GatewayIp).
 {ok,"192.168.1.50"}
 ```
 

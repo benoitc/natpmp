@@ -41,8 +41,7 @@ get_external_address(Gateway) ->
 
 %% @doc get internal address used for this gateway
 get_internal_address(Gateway) ->
-    [{_, {MyIp, _}}|_] = route(parse_address(Gateway)),
-    inet_parse:ntoa(MyIp).
+    inet_ext:get_internal_address(Gateway).
 
 discover_with_addr(Parent, Ref, Addr) ->
     case (catch natpmp:get_external_address(Addr)) of
@@ -52,30 +51,35 @@ discover_with_addr(Parent, Ref, Addr) ->
             ok
     end.
 
+
+potential_gateways() ->
+    Net_10 = inet_cidr:parse("10.0.0.0/8"),
+    Net_172_16 = inet_cidr:parse("172.16.0.0/12"),
+    Net_192_168 = inet_cidr:parse("192.168.0.0/16"),
+    Networks = [Net_10, Net_172_16, Net_192_168],
+    lists:foldl(fun({_, {Addr, Mask}}, Acc) ->
+                        case is_network(Networks, Addr) of
+                            true ->
+                                case inet_cidr:is_ipv4(Addr) of
+                                    true ->
+                                        Ip0 = mask(Addr, Mask),
+                                        Ip = setelement(4, Ip0,
+                                                        element(4, Ip0) bor 1),
+                                        [Ip | Acc];
+                                    false ->
+                                        Acc
+                                end;
+                            false ->
+                                Acc
+                        end
+                end, [], inet_ext:routes()).
+
+system_gateways() ->
+    [Ip || {_, Ip} <- inet_ext:gateways()].
+
 %% @doc discover a Nat gateway
 discover() ->
-     Net_10 = inet_cidr:parse("10.0.0.0/8"),
-     Net_172_16 = inet_cidr:parse("172.16.0.0/12"),
-     Net_192_168 = inet_cidr:parse("192.168.0.0/16"),
-     Networks = [Net_10, Net_172_16, Net_192_168],
-
-     IPs = lists:foldl(fun({_, {Addr, Mask}}, Acc) ->
-                               case is_network(Networks, Addr) of
-                                   true ->
-                                       case inet_cidr:is_ipv4(Addr) of
-                                           true ->
-                                               Ip0 = mask(Addr, Mask),
-                                               Ip = setelement(4, Ip0,
-                                                               element(4, Ip0) bor 1),
-                                               [Ip | Acc];
-                                           false ->
-                                               Acc
-                                       end;
-                                   false ->
-                                       Acc
-                               end
-                 end, [], routes()),
-
+     IPs = lists:append(system_gateways(), potential_gateways()),
      Ref = make_ref(),
      Self = self(),
 
@@ -255,52 +259,6 @@ is_network([Net | Rest], Addr) ->
     end;
 is_network([], _Addr) ->
     false.
-
-
-%% convenient function to recover the list of routes
-%% https://gist.github.com/archaelus/1247174
-%% from @archaleus (Geoff Cant)
-route(Targ) ->
-    route(Targ, routes()).
-
-route(Targ, Routes) ->
-    sort_routes(routes_for(Targ, Routes)).
-
-routes_for(Targ, Routes) ->
-    [ RT || RT = {_IF, {Addr, Mask}} <- Routes,
-            tuple_size(Targ) =:= tuple_size(Addr),
-            match_route(Targ, Addr, Mask)
-    ].
-
-sort_routes(Routes) ->
-    lists:sort(fun ({_, {_AddrA, MaskA}}, {_, {_AddrB, MaskB}}) ->
-                       MaskA > MaskB
-               end,
-               Routes).
-
-match_route(Targ, Addr, Mask)
-  when tuple_size(Targ) =:= tuple_size(Addr),
-       tuple_size(Targ) =:= tuple_size(Mask) ->
-    lists:all(fun (A) -> A end,
-              [element(I, Targ) band element(I, Mask)
-               =:= element(I, Addr) band element(I, Mask)
-               || I <- lists:seq(1, tuple_size(Targ)) ]).
-
-
-routes() ->
-    {ok, IFData} = inet:getifaddrs(),
-    lists:append([ routes(IF, IFOpts) || {IF, IFOpts} <- IFData ]).
-
-routes(IF, Opts) ->
-    {_,Routes} = lists:foldl(fun parse_opts/2, {undefined, []}, Opts),
-    [{IF, Route}  || Route <- Routes].
-
-parse_opts({addr, Addr}, {undefined, Routes}) ->
-    {{addr, Addr}, Routes};
-parse_opts({netmask, Mask}, {{addr, Addr}, Routes})
-  when tuple_size(Mask) =:= tuple_size(Addr) ->
-    {undefined, [{Addr, Mask} | Routes]};
-parse_opts(_, Acc) -> Acc.
 
 %% apply mask to the ip
 mask({A, B, C, D}, {E, F, G, H}) ->

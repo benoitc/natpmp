@@ -15,7 +15,7 @@
 -export([delete_port_mapping/4]).
 
 -define(NAT_PMP_PORT, 5351).
--define(NAT_TRIES, 9).
+-define(NAT_TRIES, 5).
 -define(NAT_INITIAL_MS, 250).
 
 -define(RECOMMENDED_MAPPING_LIFETIME_SECONDS, 3600).
@@ -78,7 +78,6 @@ discover() ->
 
      Ref = make_ref(),
      Self = self(),
-
 
      Workers = lists:foldl(fun(Ip, Acc) ->
                                    Pid = spawn_link(fun() ->
@@ -189,15 +188,21 @@ nat_rpc1(_Sock, _Gateway, _Msg, _OpCode, ?NAT_TRIES) ->
 nat_rpc1(Sock, Gateway, Msg, OpCode, Tries) ->
     inet:setopts(Sock, [{active, once}]),
     Timeout = 250 bsl Tries,
-    ok = gen_udp:send(Sock, Gateway, ?NAT_PMP_PORT, Msg),
-    receive
-        {udp, _Sock, Gateway, _Port, Packet} ->
-            parse_response(Packet, OpCode);
-        {udp, _, _, _, _} ->
+    case gen_udp:send(Sock, Gateway, ?NAT_PMP_PORT, Msg) of
+        ok ->
+            receive
+                {udp, _Sock, Gateway, _Port, Packet} ->
+                    parse_response(Packet, OpCode);
+                {udp, _, _, _, _} ->
+                    nat_rpc1(Sock, Gateway, Msg, OpCode, Tries + 1)
+            after Timeout ->
+                      nat_rpc1(Sock, Gateway, Msg, OpCode, Tries + 1)
+            end;
+        _Error ->
             nat_rpc1(Sock, Gateway, Msg, OpCode, Tries + 1)
-    after Timeout ->
-              nat_rpc1(Sock, Gateway, Msg, OpCode, Tries + 1)
     end.
+
+
 
 
 parse_response(<< _Version, ResponseCode, Status:16/unsigned-integer,

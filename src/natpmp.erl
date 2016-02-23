@@ -41,7 +41,7 @@ get_external_address(Gateway) ->
 
 %% @doc get internal address used for this gateway
 get_internal_address(Gateway) ->
-    [{_, {MyIp, _}}|_] = route(Gateway),
+    [{_, {MyIp, _}}|_] = route(parse_address(Gateway)),
     inet_parse:ntoa(MyIp).
 
 discover_with_addr(Parent, Ref, Addr) ->

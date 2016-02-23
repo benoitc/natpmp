@@ -1,7 +1,7 @@
 {application, natpmp, [
 	{description, "NAT-PMP client"},
-	{vsn, "0.1.0"},
+	{vsn, "0.2.0"},
 	{modules, ['natpmp']},
 	{registered, []},
-	{applications, [kernel,stdlib]}
+	{applications, [kernel,stdlib,inet_cidr]}
 ]}.

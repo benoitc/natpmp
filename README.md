@@ -39,6 +39,24 @@ This map the port 80 to the port 8080.
 ok = natpmp:delete_port_mapping(GatewayIp, Protocol, InternalPort, ExternalPort)
 ```
 
+### Discover the gateway
+
+```erlang
+1> {ok, Gateway} = natpmp:discover().
+{ok,{10,0,1,1}}
+```
+
+### Get internal and external address
+
+```erlang
+1> {ok, Gateway} = natpmp:discover().
+{ok,{10,0,1,1}}
+2> natpmp:get_internal_address(Gateway).
+"10.0.1.6"
+3> natpmp:get_external_address(Gateway).
+{ok,"192.168.1.50"}
+```
+
 ## Contribute
 
 For issues, comments or feedback please create an [issue](https://github.com/benoitc/natpmp/issues).

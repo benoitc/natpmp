@@ -9,6 +9,8 @@
 
 
 -export([get_external_address/1]).
+-export([get_internal_address/1]).
+-export([discover/0]).
 -export([add_port_mapping/4, add_port_mapping/5]).
 -export([delete_port_mapping/4]).
 
@@ -36,6 +38,76 @@
 get_external_address(Gateway) ->
 	Msg = << 0, 0 >>,
 	nat_rpc(Gateway, Msg, 0).
+
+%% @doc get internal address used for this gateway
+get_internal_address(Gateway) ->
+    [{_, {MyIp, _}}|_] = route(Gateway),
+    inet_parse:ntoa(MyIp).
+
+discover_with_addr(Parent, Ref, Addr) ->
+    case natpmp:get_external_address(Addr) of
+        {ok, _Ip} ->
+            Parent ! {nat, Ref, self(), Addr};
+        _Else ->
+            ok
+    end.
+
+%% @doc discover a Nat gateway
+discover() ->
+     Net_10 = inet_cidr:parse("10.0.0.0/8"),
+     Net_172_16 = inet_cidr:parse("172.16.0.0/12"),
+     Net_192_168 = inet_cidr:parse("192.168.0.0/16"),
+     Networks = [Net_10, Net_172_16, Net_192_168],
+
+     IPs = lists:foldl(fun({_, {Addr, Mask}}, Acc) ->
+                               case is_network(Networks, Addr) of
+                                   true ->
+                                       case inet_cidr:is_ipv4(Addr) of
+                                           true ->
+                                               Ip0 = mask(Addr, Mask),
+                                               Ip = setelement(4, Ip0,
+                                                               element(4, Ip0) bor 1),
+                                               [Ip | Acc];
+                                           false ->
+                                               Acc
+                                       end;
+                                   false ->
+                                       Acc
+                               end
+                 end, [], routes()),
+
+     Ref = make_ref(),
+     Self = self(),
+
+
+     Workers = lists:foldl(fun(Ip, Acc) ->
+                                   Pid = spawn_link(fun() ->
+                                                            discover_with_addr(Self, Ref, Ip)
+                                                    end),
+                                   erlang:monitor(process, Pid),
+                                   [Pid | Acc]
+                           end, [], IPs),
+
+     discover_wait(Workers, Ref).
+
+discover_wait([], _Ref) ->
+    no_nat;
+discover_wait(Workers, Ref) ->
+    receive
+        {nat, Ref, WorkerPid, GatewayIp} ->
+            lists:foreach(fun(Pid) ->
+                                  catch unlink(Pid),
+                                  catch exit(Pid, shutdown),
+                                  receive
+                                      {'DOWN', _, _, Pid, _} -> ok
+                                  end
+                          end, Workers -- [WorkerPid]),
+            {ok, GatewayIp};
+        {'DOWN', _MRef, _Type, WorkerPid, Info} ->
+            io:format("worker is down: ~p~n", [Info]),
+            discover_wait(Workers -- [WorkerPid], Ref)
+
+    end.
 
 
 %% @doc add a port mapping with default lifetime
@@ -94,10 +166,17 @@ delete_port_mapping(Gateway, Protocol, InternalPort, ExternalPort) ->
 %% ---------------------
 %% - private functions -
 %% ---------------------
+%%
+parse_address({_, _, _, _}=Addr) -> Addr;
+parse_address({_, _, _, _, _, _, _, _}= Addr) -> Addr;
+parse_address(S) ->
+    {ok, Addr} = inet:parse_address(S),
+    Addr.
+
 
 nat_rpc(Gateway0, Msg, OpCode) ->
 	_ = application:start(inets),
-    {ok, Gateway} = inet:parse_address(Gateway0),
+    Gateway = parse_address(Gateway0),
     {ok, Sock} = gen_udp:open(0, [{active, once}, inet, binary]),
     try
         nat_rpc1(Sock, Gateway, Msg, OpCode, 0)
@@ -162,3 +241,63 @@ parse_status(2) -> {error, not_authorized};
 parse_status(3) -> {error, network_failure};
 parse_status(4) -> {error, out_of_resource};
 parse_status(5) -> {error, unsupported_opcode}.
+
+
+%% check if an ip is a member of the test networks
+is_network([Net | Rest], Addr) ->
+    case inet_cidr:contains(Net, Addr) of
+        true -> true;
+        false -> is_network(Rest, Addr)
+    end;
+is_network([], _Addr) ->
+    false.
+
+
+%% convenient function to recover the list of routes
+%% https://gist.github.com/archaelus/1247174
+%% from @archaleus (Geoff Cant)
+route(Targ) ->
+    route(Targ, routes()).
+
+route(Targ, Routes) ->
+    sort_routes(routes_for(Targ, Routes)).
+
+routes_for(Targ, Routes) ->
+    [ RT || RT = {_IF, {Addr, Mask}} <- Routes,
+            tuple_size(Targ) =:= tuple_size(Addr),
+            match_route(Targ, Addr, Mask)
+    ].
+
+sort_routes(Routes) ->
+    lists:sort(fun ({_, {_AddrA, MaskA}}, {_, {_AddrB, MaskB}}) ->
+                       MaskA > MaskB
+               end,
+               Routes).
+
+match_route(Targ, Addr, Mask)
+  when tuple_size(Targ) =:= tuple_size(Addr),
+       tuple_size(Targ) =:= tuple_size(Mask) ->
+    lists:all(fun (A) -> A end,
+              [element(I, Targ) band element(I, Mask)
+               =:= element(I, Addr) band element(I, Mask)
+               || I <- lists:seq(1, tuple_size(Targ)) ]).
+
+
+routes() ->
+    {ok, IFData} = inet:getifaddrs(),
+    lists:append([ routes(IF, IFOpts) || {IF, IFOpts} <- IFData ]).
+
+routes(IF, Opts) ->
+    {_,Routes} = lists:foldl(fun parse_opts/2, {undefined, []}, Opts),
+    [{IF, Route}  || Route <- Routes].
+
+parse_opts({addr, Addr}, {undefined, Routes}) ->
+    {{addr, Addr}, Routes};
+parse_opts({netmask, Mask}, {{addr, Addr}, Routes})
+  when tuple_size(Mask) =:= tuple_size(Addr) ->
+    {undefined, [{Addr, Mask} | Routes]};
+parse_opts(_, Acc) -> Acc.
+
+%% apply mask to the ip
+mask({A, B, C, D}, {E, F, G, H}) ->
+    {A band E, B band F, C band G, D band H}.

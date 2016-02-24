@@ -190,16 +190,10 @@ delete_port_mapping(Gateway, Protocol, InternalPort, ExternalPort) ->
 %% - private functions -
 %% ---------------------
 %%
-parse_address({_, _, _, _}=Addr) -> Addr;
-parse_address({_, _, _, _, _, _, _, _}= Addr) -> Addr;
-parse_address(S) ->
-    {ok, Addr} = inet:parse_address(S),
-    Addr.
-
 
 nat_rpc(Gateway0, Msg, OpCode) ->
 	_ = application:start(inets),
-    Gateway = parse_address(Gateway0),
+    Gateway = inet_ext:parse_address(Gateway0),
     {ok, Sock} = gen_udp:open(0, [{active, once}, inet, binary]),
     try
         nat_rpc1(Sock, Gateway, Msg, OpCode, 0)

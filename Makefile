@@ -1,6 +1,6 @@
 PROJECT = natpmp
 PROJECT_DESCRIPTION = NAT-PMP client
-PROJECT_VERSION = 0.5.2
+PROJECT_VERSION = 0.5.3
 
 DEPS = inet_cidr inet_ext
 

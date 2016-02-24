@@ -40,6 +40,10 @@ get_external_address(Gateway) ->
 	nat_rpc(Gateway, Msg, 0).
 
 %% @doc get internal address used for this gateway
+-spec get_internal_address(Gateway) -> {ok, InternalIp} | {error, Reason} when
+	Gateway :: inet:ip_address() | inet:hostname(),
+    InternalIp :: inet:ip_address() | inet:hostname(),
+    Reason :: any().
 get_internal_address(Gateway) ->
     inet_ext:get_internal_address(Gateway).
 
@@ -50,7 +54,6 @@ discover_with_addr(Parent, Ref, Addr) ->
         _Else ->
             ok
     end.
-
 
 potential_gateways() ->
     Net_10 = inet_cidr:parse("10.0.0.0/8"),
@@ -78,6 +81,9 @@ system_gateways() ->
     [Ip || {_, Ip} <- inet_ext:gateways()].
 
 %% @doc discover a Nat gateway
+-spec discover() -> {ok, Gateway} | {error, Reason} when
+      Gateway :: inet:ip_address(),
+      Reason :: any().
 discover() ->
     IPs = case system_gateways() of
               [] ->  potential_gateways();
@@ -117,6 +123,17 @@ discover_wait(Workers, Ref) ->
 
 
 %% @doc add a port mapping with default lifetime
+-spec add_port_mapping(Gateway, Protocol, InternalPort, ExternalPortRequest) ->
+    {ok, Since, InternalPort, ExternalPort, MappingLifetime} | {error, Reason}
+      when
+      Gateway :: inet:ip_address() | inet:hostname(),
+      Protocol :: tcp | udp,
+      InternalPort :: non_neg_integer(),
+      ExternalPortRequest :: non_neg_integer(),
+      Since :: non_neg_integer(),
+      ExternalPort :: non_neg_integer(),
+      MappingLifetime :: non_neg_integer(),
+      Reason :: natpmp_error().
 add_port_mapping(Gateway, Protocol, InternalPort, ExternalPort) ->
     add_port_mapping(Gateway, Protocol, InternalPort, ExternalPort,
                      ?RECOMMENDED_MAPPING_LIFETIME_SECONDS).

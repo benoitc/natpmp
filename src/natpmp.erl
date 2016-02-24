@@ -79,7 +79,11 @@ system_gateways() ->
 
 %% @doc discover a Nat gateway
 discover() ->
-     IPs = lists:append(system_gateways(), potential_gateways()),
+    IPs = case system_gateways() of
+              [] ->  potential_gateways();
+              Gateways -> Gateways
+          end,
+
      Ref = make_ref(),
      Self = self(),
 
